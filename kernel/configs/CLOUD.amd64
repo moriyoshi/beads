@@ -1,0 +1,123 @@
+# CLOUD -- one amd64 kernel for QEMU/KVM, Amazon EC2 (Nitro), Google Compute
+# Engine and Microsoft Azure appliances.
+#
+# Derived from GENERIC by keeping only what those platforms present:
+# ACPI, PCI(e), a 16550 serial console, virtio, NVMe, ENA and Hyper-V VMBus.
+# There is no graphics console, keyboard, USB, audio or module loader.
+
+include 	"arch/amd64/conf/std.amd64"
+
+maxusers	16
+
+options 	RTC_OFFSET=0	# hardware clock is UTC
+options 	NTP		# NTP phase/frequency locked loop
+options 	SVS		# separate kernel/user address spaces (Meltdown)
+options 	PCPU_IDT	# per-CPU IDT and GDT (needed with SVS)
+makeoptions	SPECTRE_V2_GCC_MITIGATION=1
+options 	SPECTRE_V2_GCC_MITIGATION
+
+makeoptions	COPTS="-O2 -fno-omit-frame-pointer"
+# Keep DDB for readable panics, but print a backtrace and reboot instead of
+# waiting at a prompt on a console nobody is watching.
+options 	DDB
+options 	DDB_ONPANIC=0	# 0: backtrace (db_dumpstack), then reboot; >0 enters ddb
+options 	DDB_HISTORY_SIZE=128
+
+# CPU and hypervisor support.
+acpicpu*	at cpu?		# ACPI CPU (C-states, P-states)
+hyperv0 	at cpu0		# Microsoft Hyper-V
+
+# File systems. FFS for the root and data disks (WAPBL journaling for
+# read-write ones), tmpfs for scratch space, kernfs/procfs/ptyfs for
+# introspection, msdosfs to read the EFI system partition.
+file-system	FFS
+file-system	TMPFS
+file-system	KERNFS
+file-system	PROCFS
+file-system	PTYFS
+file-system	MSDOSFS
+options 	WAPBL
+options 	UFS_DIRHASH
+
+options 	DKWEDGE_AUTODISCOVER	# partitions as dk(4) wedges
+options 	DKWEDGE_METHOD_GPT
+
+options 	INET
+options 	INET6
+
+# Go's NetBSD runtime still calls the NetBSD 10 versions of some system calls
+# (__kevent50 for its network poller); without COMPAT_100 every Go program
+# dies with "kevent failed" at its first network or timer operation.
+include 	"conf/compat_netbsd100.config"
+
+config		netbsd	root on ? type ?
+
+# ACPI.
+acpi0		at mainbus0
+options 	ACPI_SCANPCI
+options 	MPBIOS
+options 	MPBIOS_SCANPCI
+acpibut*	at acpi?		# power button
+acpivmgenid*	at acpi?		# VM generation ID (snapshot detection)
+attimer*	at acpi?
+hpet*		at acpihpetbus?
+hpet*		at acpinodebus?
+com0		at acpi?
+com1		at acpi?
+com*		at acpi?
+qemufwcfg*	at acpi?		# QEMU fw_cfg (configuration passing)
+
+# Buses.
+pci*		at mainbus? bus ?
+pci*		at pchb? bus ?
+pci*		at ppb? bus ?
+pchb*		at pci? dev ? function ?
+pcib*		at pci? dev ? function ?
+ppb*		at pci? dev ? function ?
+ichlpcib*	at pci? dev ? function ?	# Q35 LPC bridge
+isa0		at mainbus?
+isa0		at pcib?
+isa0		at ichlpcib?
+
+# Legacy ISA devices still present on every platform: the serial ports
+# (when ACPI does not list them) and the 8254 timer.
+com0		at isa? port 0x3f8 irq 4
+com1		at isa? port 0x2f8 irq 3
+attimer0	at isa?
+pcppi0		at isa?
+
+# Storage.
+nvme*		at pci? dev ? function ?	# EC2 Nitro, GCE NVMe, QEMU nvme
+ld*		at nvme? nsid ?
+ahcisata*	at pci? dev ? function ?	# QEMU q35 default controller
+atabus*		at ata?
+wd*		at atabus? drive ? flags 0x0000
+scsibus*	at scsi?
+sd*		at scsibus? target ? lun ?
+
+# Virtio (QEMU/KVM, GCE).
+virtio*		at pci? dev ? function ?
+ld*		at virtio?		# virtio-blk
+vioif*		at virtio?		# virtio-net
+vioscsi*	at virtio?		# virtio-scsi (GCE default disk interface)
+viornd*		at virtio?		# entropy
+viomb*		at virtio?		# memory balloon
+
+# Amazon EC2 Nitro.
+ena*		at pci? dev ? function ?	# Elastic Network Adapter
+
+# Microsoft Azure / Hyper-V.
+vmbus*		at acpi?
+hvn*		at vmbus?		# NetVSC
+hvs*		at vmbus?		# StorVSC
+hvheartbeat*	at vmbus?
+hvshutdown*	at vmbus?		# host-initiated shutdown
+hvtimesync*	at vmbus?
+
+pseudo-device	bpfilter		# raw frames for the DHCP client
+pseudo-device	loop
+pseudo-device	md			# memory disks (md_root images)
+options 	MEMORY_DISK_HOOKS
+options 	MEMORY_DISK_DYNAMIC
+pseudo-device	pty
+pseudo-device	ksyms

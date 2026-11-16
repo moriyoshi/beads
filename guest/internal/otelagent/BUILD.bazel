@@ -1,0 +1,43 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "otelagent",
+    srcs = ["agent.go"],
+    importpath = "github.com/moriyoshi/beads/guest/internal/otelagent",
+    visibility = ["//guest:__subpackages__"],
+    deps = [
+        "@com_github_open_telemetry_opentelemetry_collector_contrib_exporter_awscloudwatchlogsexporter//:awscloudwatchlogsexporter",
+        "@com_github_open_telemetry_opentelemetry_collector_contrib_exporter_awsemfexporter//:awsemfexporter",
+        "@com_github_open_telemetry_opentelemetry_collector_contrib_exporter_awsxrayexporter//:awsxrayexporter",
+        "@com_github_open_telemetry_opentelemetry_collector_contrib_exporter_azuremonitorexporter//:azuremonitorexporter",
+        "@com_github_open_telemetry_opentelemetry_collector_contrib_exporter_googlecloudexporter//:googlecloudexporter",
+        "@com_github_open_telemetry_opentelemetry_collector_contrib_processor_resourceprocessor//:resourceprocessor",
+        "@com_github_open_telemetry_opentelemetry_collector_contrib_receiver_hostmetricsreceiver//:hostmetricsreceiver",
+        "@io_opentelemetry_go_collector_component//:component",
+        "@io_opentelemetry_go_collector_confmap//:confmap",
+        "@io_opentelemetry_go_collector_confmap_provider_envprovider//:envprovider",
+        "@io_opentelemetry_go_collector_confmap_provider_fileprovider//:fileprovider",
+        "@io_opentelemetry_go_collector_confmap_provider_yamlprovider//:yamlprovider",
+        "@io_opentelemetry_go_collector_exporter//:exporter",
+        "@io_opentelemetry_go_collector_exporter_debugexporter//:debugexporter",
+        "@io_opentelemetry_go_collector_exporter_otlpexporter//:otlpexporter",
+        "@io_opentelemetry_go_collector_exporter_otlphttpexporter//:otlphttpexporter",
+        "@io_opentelemetry_go_collector_otelcol//:otelcol",
+        "@io_opentelemetry_go_collector_processor//:processor",
+        "@io_opentelemetry_go_collector_processor_batchprocessor//:batchprocessor",
+        "@io_opentelemetry_go_collector_processor_memorylimiterprocessor//:memorylimiterprocessor",
+        "@io_opentelemetry_go_collector_receiver//:receiver",
+        "@io_opentelemetry_go_collector_receiver_otlpreceiver//:otlpreceiver",
+        "@io_opentelemetry_go_collector_service//telemetry/otelconftelemetry",
+    ],
+)
+
+go_test(
+    name = "otelagent_test",
+    srcs = ["agent_test.go"],
+    embed = [":otelagent"],
+    deps = [
+        "//guest/internal/otelconfig",
+        "@io_opentelemetry_go_collector_otelcol//:otelcol",
+    ],
+)

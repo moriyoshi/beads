@@ -1,0 +1,29 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "logship",
+    srcs = ["logship.go"],
+    importpath = "github.com/moriyoshi/beads/guest/internal/logship",
+    visibility = ["//guest:__subpackages__"],
+    deps = [
+        "//guest/internal/otelconfig",
+        "@io_opentelemetry_go_otel//attribute",
+        "@io_opentelemetry_go_otel_exporters_otlp_otlplog_otlploghttp//:otlploghttp",
+        "@io_opentelemetry_go_otel_log//:log",
+        "@io_opentelemetry_go_otel_sdk//resource",
+        "@io_opentelemetry_go_otel_sdk_log//:log",
+    ],
+)
+
+go_test(
+    name = "logship_test",
+    srcs = ["logship_test.go"],
+    embed = [":logship"],
+    deps = [
+        "//guest/internal/otelconfig",
+        "//internal/otlpsink",
+        "@io_opentelemetry_go_otel//attribute",
+        "@io_opentelemetry_go_otel_log//:log",
+        "@io_opentelemetry_go_otel_sdk_log//:log",
+    ],
+)

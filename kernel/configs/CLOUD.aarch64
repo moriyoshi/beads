@@ -1,0 +1,136 @@
+# Copyright 2026 Moriyoshi Koizumi
+# SPDX-License-Identifier: Apache-2.0
+#
+# CLOUD -- one aarch64 kernel for QEMU "virt" and AWS Graviton (with room for
+# other ACPI/UEFI arm64 clouds).
+#
+# Derived from GENERIC64 by keeping what a UEFI virtual machine presents:
+# ACPI (and FDT, which QEMU also provides), PCIe, GICv2/v3, the generic
+# timer, PL011 and 16550 serial consoles, virtio, NVMe and ENA. There is no
+# graphics console, keyboard, USB, audio, SoC support or module loader.
+
+include		"arch/evbarm/conf/std.generic64"
+
+# files.generic64 minus the SoC file lists: it includes every SoC's files
+# unconditionally, and the Broadcom ones then need a SoC choice and the whole
+# Raspberry Pi platform to link.
+include		"arch/arm/pic/files.pic"
+include		"arch/arm/cortex/files.cortex"
+include		"arch/evbarm/conf/files.fdt"
+include		"arch/arm/acpi/files.acpi"
+include		"external/bsd/sljit/conf/files.sljit"
+
+no options 	MODULAR
+no options 	MODULAR_DEFAULT_AUTOLOAD
+
+maxusers	16
+
+options 	CPU_CORTEX
+options 	MULTIPROCESSOR
+options 	ARMV81_HAFDBS
+options 	ARMV81_PAN
+
+options 	RTC_OFFSET=0	# hardware clock is UTC
+options 	NTP
+
+# Readable panics that print a backtrace and reboot instead of waiting at a
+# prompt on a console nobody is watching.
+options 	DDB
+options 	DDB_ONPANIC=0	# 0: backtrace (db_dumpstack), then reboot; >0 enters ddb
+options 	DDB_HISTORY_SIZE=128
+
+file-system	FFS
+file-system	TMPFS
+file-system	KERNFS
+file-system	PROCFS
+file-system	PTYFS
+file-system	MSDOSFS
+options 	WAPBL
+options 	UFS_DIRHASH
+
+options 	DKWEDGE_AUTODISCOVER
+options 	DKWEDGE_METHOD_GPT
+
+options 	INET
+options 	INET6
+
+# Go's NetBSD runtime still calls the NetBSD 10 versions of some system calls
+# (__kevent50 for its network poller).
+include 	"conf/compat_netbsd100.config"
+
+config		netbsd	root on ? type ?
+
+# UEFI runtime services (real-time clock on machines without a PL031).
+options 	EFI_RUNTIME
+pseudo-device	efi
+
+# Device tree and ACPI. The EFI loader passes a device tree that, on ACPI
+# machines, points at the ACPI tables.
+armfdt0 	at root
+simplebus*	at fdt? pass 0
+acpifdt*	at fdt? pass 1
+acpi*		at acpifdt?
+acpibut*	at acpi?		# power button
+acpiged*	at acpi?		# generic event device (QEMU virt power button)
+acpivmgenid*	at acpi?
+
+cpus*		at fdt? pass 0
+cpu*		at fdt? pass 0
+cpu*		at acpi?
+psci*		at fdt? pass 0
+fclock* 	at fdt? pass 1
+ffclock*	at fdt? pass 1
+
+gtmr*		at fdt? pass 2
+gtmr*		at acpi?
+armgtmr0	at gtmr?
+
+gic*		at fdt? pass 1
+gic*		at acpi?
+armgic0 	at gic?
+gicvthree*	at fdt? pass 1
+gicvthree*	at acpi?
+
+qemufwcfg*	at fdt?
+qemufwcfg*	at acpi?
+plrtc*		at fdt?			# PL031 real-time clock
+
+# PCIe.
+pcihost*	at fdt?
+acpipchb*	at acpi?
+pci*		at pcibus?
+ppb*		at pci? dev ? function ?
+pci*		at ppb?
+
+# Serial consoles: PL011 (QEMU virt, Graviton) and ACPI-described 16550s.
+# (com at fdt would drag in SoC glue such as bcm2835_com.)
+plcom*		at fdt? pass 4
+plcom*		at acpi?
+com*		at acpi?
+# AWS Graviton's serial console is a PCI 16550 ("Amazon.com EC2 Serial").
+puc*		at pci? dev ? function ?
+com*		at puc? port ?
+
+# Storage.
+nvme*		at pci? dev ? function ?	# Graviton EBS, QEMU nvme
+ld*		at nvme? nsid ?
+scsibus*	at scsi?
+sd*		at scsibus? target ? lun ?
+
+# Virtio (QEMU virt).
+virtio*		at fdt?
+virtio*		at acpi?
+virtio*		at pci? dev ? function ?
+ld*		at virtio?
+vioif*		at virtio?
+vioscsi*	at virtio?
+viornd*		at virtio?
+
+# Amazon EC2 (Graviton).
+ena*		at pci? dev ? function ?
+
+pseudo-device	bpfilter		# raw frames for the DHCP client
+pseudo-device	loop
+# md(4) and the memory-disk hooks come from std.generic64.
+pseudo-device	pty
+pseudo-device	ksyms

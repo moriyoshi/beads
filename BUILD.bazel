@@ -1,0 +1,5 @@
+load("@gazelle//:def.bzl", "gazelle")
+
+# gazelle:prefix github.com/moriyoshi/beads
+# gazelle:exclude tests
+gazelle(name = "gazelle")

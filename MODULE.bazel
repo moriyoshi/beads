@@ -1,0 +1,26 @@
+module(
+    name = "beads",
+    version = "0.0.0",
+)
+
+bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "rules_go", version = "0.65.0")
+bazel_dep(name = "gazelle", version = "0.54.0")
+
+go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
+go_sdk.from_file(go_mod = "//:go.mod")
+
+go_deps = use_extension("@gazelle//:extensions.bzl", "go_deps")
+go_deps.from_file(go_mod = "//:go.mod")
+use_repo(go_deps, "com_github_aws_aws_sdk_go_v2", "com_github_aws_aws_sdk_go_v2_config", "com_github_aws_aws_sdk_go_v2_service_cloudwatchlogs", "com_github_aws_aws_sdk_go_v2_service_ebs", "com_github_aws_aws_sdk_go_v2_service_ec2", "com_github_aws_aws_sdk_go_v2_service_iam", "com_github_aws_aws_sdk_go_v2_service_sts", "com_github_aws_aws_sdk_go_v2_service_xray", "com_github_open_telemetry_opentelemetry_collector_contrib_exporter_awscloudwatchlogsexporter", "com_github_open_telemetry_opentelemetry_collector_contrib_exporter_awsemfexporter", "com_github_open_telemetry_opentelemetry_collector_contrib_exporter_awsxrayexporter", "com_github_open_telemetry_opentelemetry_collector_contrib_exporter_azuremonitorexporter", "com_github_open_telemetry_opentelemetry_collector_contrib_exporter_googlecloudexporter", "com_github_open_telemetry_opentelemetry_collector_contrib_processor_resourceprocessor", "com_github_open_telemetry_opentelemetry_collector_contrib_receiver_hostmetricsreceiver", "io_opentelemetry_go_collector_component", "io_opentelemetry_go_collector_confmap", "io_opentelemetry_go_collector_confmap_provider_envprovider", "io_opentelemetry_go_collector_confmap_provider_fileprovider", "io_opentelemetry_go_collector_confmap_provider_yamlprovider", "io_opentelemetry_go_collector_exporter", "io_opentelemetry_go_collector_exporter_debugexporter", "io_opentelemetry_go_collector_exporter_otlpexporter", "io_opentelemetry_go_collector_exporter_otlphttpexporter", "io_opentelemetry_go_collector_otelcol", "io_opentelemetry_go_collector_processor", "io_opentelemetry_go_collector_processor_batchprocessor", "io_opentelemetry_go_collector_processor_memorylimiterprocessor", "io_opentelemetry_go_collector_receiver", "io_opentelemetry_go_collector_receiver_otlpreceiver", "io_opentelemetry_go_collector_service", "io_opentelemetry_go_otel", "io_opentelemetry_go_otel_exporters_otlp_otlplog_otlploghttp", "io_opentelemetry_go_otel_exporters_otlp_otlpmetric_otlpmetrichttp", "io_opentelemetry_go_otel_exporters_otlp_otlptrace_otlptracehttp", "io_opentelemetry_go_otel_log", "io_opentelemetry_go_otel_metric", "io_opentelemetry_go_otel_sdk", "io_opentelemetry_go_otel_sdk_log", "io_opentelemetry_go_otel_sdk_metric", "io_opentelemetry_go_otel_trace", "io_opentelemetry_go_proto_otlp", "org_golang_google_protobuf", "org_golang_x_net", "org_golang_x_sys")
+
+netbsd = use_extension("//netbsd:extensions.bzl", "netbsd")
+netbsd.release(
+    arch = "amd64",
+    version = "11.1",
+)
+netbsd.release(
+    arch = "aarch64",
+    version = "11.1",
+)
+use_repo(netbsd, "curl_ca_bundle", "netbsd_11_1_aarch64", "netbsd_11_1_aarch64_tools", "netbsd_11_1_amd64", "netbsd_11_1_amd64_tools")

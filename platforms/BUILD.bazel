@@ -1,0 +1,17 @@
+package(default_visibility = ["//visibility:public"])
+
+platform(
+    name = "netbsd_amd64",
+    constraint_values = [
+        "@platforms//os:netbsd",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+platform(
+    name = "netbsd_aarch64",
+    constraint_values = [
+        "@platforms//os:netbsd",
+        "@platforms//cpu:aarch64",
+    ],
+)

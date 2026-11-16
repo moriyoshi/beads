@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "gpt",
+    srcs = ["gpt.go"],
+    importpath = "github.com/moriyoshi/beads/internal/gpt",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "gpt_test",
+    srcs = ["gpt_test.go"],
+    embed = [":gpt"],
+)

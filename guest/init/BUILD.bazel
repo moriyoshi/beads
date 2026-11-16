@@ -1,0 +1,39 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "init_lib",
+    srcs = [
+        "config.go",
+        "main_netbsd.go",
+        "main_other.go",
+    ],
+    importpath = "github.com/moriyoshi/beads/guest/init",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//guest/internal/metadata",
+        "//guest/internal/otelconfig",
+    ] + select({
+        "@rules_go//go/platform:netbsd": [
+            "//guest/internal/dhcp",
+            "//guest/internal/logship",
+            "//guest/internal/nbsys",
+            "//guest/internal/otelagent",
+            "//internal/sntp",
+            "@io_opentelemetry_go_otel_log//:log",
+            "@org_golang_x_sys//unix",
+        ],
+        "//conditions:default": [],
+    }),
+)
+
+go_binary(
+    name = "init",
+    embed = [":init_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "init_test",
+    srcs = ["config_test.go"],
+    embed = [":init_lib"],
+)

@@ -1,0 +1,44 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "ec2",
+    srcs = [
+        "ami.go",
+        "iam.go",
+        "smoke.go",
+        "snapshot.go",
+    ],
+    importpath = "github.com/moriyoshi/beads/internal/cloud/ec2",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "@com_github_aws_aws_sdk_go_v2//aws",
+        "@com_github_aws_aws_sdk_go_v2_service_cloudwatchlogs//:cloudwatchlogs",
+        "@com_github_aws_aws_sdk_go_v2_service_cloudwatchlogs//types",
+        "@com_github_aws_aws_sdk_go_v2_service_ebs//:ebs",
+        "@com_github_aws_aws_sdk_go_v2_service_ebs//types",
+        "@com_github_aws_aws_sdk_go_v2_service_ec2//:ec2",
+        "@com_github_aws_aws_sdk_go_v2_service_ec2//types",
+        "@com_github_aws_aws_sdk_go_v2_service_iam//:iam",
+        "@com_github_aws_aws_sdk_go_v2_service_iam//types",
+        "@com_github_aws_aws_sdk_go_v2_service_xray//:xray",
+    ],
+)
+
+go_test(
+    name = "ec2_test",
+    srcs = [
+        "ec2_test.go",
+        "telemetry_test.go",
+    ],
+    embed = [":ec2"],
+    deps = [
+        "@com_github_aws_aws_sdk_go_v2//aws",
+        "@com_github_aws_aws_sdk_go_v2_service_cloudwatchlogs//:cloudwatchlogs",
+        "@com_github_aws_aws_sdk_go_v2_service_cloudwatchlogs//types",
+        "@com_github_aws_aws_sdk_go_v2_service_ebs//:ebs",
+        "@com_github_aws_aws_sdk_go_v2_service_ebs//types",
+        "@com_github_aws_aws_sdk_go_v2_service_ec2//:ec2",
+        "@com_github_aws_aws_sdk_go_v2_service_ec2//types",
+        "@com_github_aws_aws_sdk_go_v2_service_iam//:iam",
+    ],
+)

@@ -1,0 +1,24 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "metadata",
+    srcs = [
+        "dotenv.go",
+        "fwcfg.go",
+        "metadata.go",
+        "userenv.go",
+    ],
+    importpath = "github.com/moriyoshi/beads/guest/internal/metadata",
+    visibility = ["//guest:__subpackages__"],
+)
+
+go_test(
+    name = "metadata_test",
+    srcs = [
+        "dotenv_test.go",
+        "fwcfg_test.go",
+        "metadata_test.go",
+        "userenv_test.go",
+    ],
+    embed = [":metadata"],
+)

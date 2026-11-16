@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "otelconfig",
+    srcs = ["otelconfig.go"],
+    importpath = "github.com/moriyoshi/beads/guest/internal/otelconfig",
+    visibility = ["//guest:__subpackages__"],
+)
+
+go_test(
+    name = "otelconfig_test",
+    srcs = ["otelconfig_test.go"],
+    embed = [":otelconfig"],
+)

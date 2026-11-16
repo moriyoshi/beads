@@ -1,0 +1,4 @@
+[
+  {"key": "HELLO_GREETING", "value": "howdy"},
+  {"key": "OTEL_SERVICE_NAME", "value": "not-hello"}
+]

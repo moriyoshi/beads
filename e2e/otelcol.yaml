@@ -1,0 +1,52 @@
+# Copyright 2026 Moriyoshi Koizumi
+# SPDX-License-Identifier: Apache-2.0
+
+# A custom collector configuration for //e2e:hello_custom_otel_image. It is
+# valid only if the collector gets HELLO_RESOURCE_KEY from user-data
+# (hello_otel.env): with no default, an unset variable becomes an empty
+# attribute key, which the resource processor rejects, so the collector
+# would not start and the boot test's logs_expect would fail.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 127.0.0.1:4318
+      grpc:
+        endpoint: 127.0.0.1:4317
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 20
+    spike_limit_percentage: 5
+  batch: {}
+  resource:
+    attributes:
+      - key: ${env:HELLO_RESOURCE_KEY}
+        value: ${env:BEADS_INSTANCE_ID:-none}
+        action: upsert
+
+exporters:
+  otlp_http:
+    # vmrun's receiver, named through fw_cfg.
+    endpoint: ${env:BEADS_OTLP_ENDPOINT}
+
+service:
+  telemetry:
+    logs:
+      level: warn
+    metrics:
+      level: none
+  pipelines:
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp_http]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp_http]
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp_http]

@@ -1,0 +1,8 @@
+beads
+Copyright 2026 Moriyoshi Koizumi
+
+This product includes software developed by Moriyoshi Koizumi.
+
+The kernel configurations in kernel/configs/ are derived from the NetBSD
+GENERIC kernel configurations, which are part of NetBSD and are distributed
+under the NetBSD license. See https://www.netbsd.org/about/redistribution.html.

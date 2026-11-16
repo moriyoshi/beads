@@ -1,0 +1,39 @@
+# Copyright 2026 Moriyoshi Koizumi
+# SPDX-License-Identifier: Apache-2.0
+#
+# The OpenTelemetry Collector distribution shipped in beads appliances,
+# generated with the official builder (ocb):
+#
+#   go run go.opentelemetry.io/collector/cmd/builder@v0.165.0 \
+#       --config collector/builder-config.yaml --skip-compilation
+#
+# Logs flow in over OTLP from init (the program's stdout/stderr and init's
+# own messages) and out through the exporter configured for the platform.
+
+dist:
+  name: otelcol-beads
+  description: OpenTelemetry Collector for beads NetBSD appliances
+  output_path: ./collector/src
+  module: github.com/moriyoshi/beads/collector/src
+  version: 0.165.0
+
+receivers:
+  - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.165.0
+
+processors:
+  - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.165.0
+  - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.165.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.165.1
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.165.1
+
+exporters:
+  - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.165.0
+  - gomod: go.opentelemetry.io/collector/exporter/otlpexporter v0.165.0
+  - gomod: go.opentelemetry.io/collector/exporter/otlphttpexporter v0.165.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awscloudwatchlogsexporter v0.165.1
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.165.1
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/azuremonitorexporter v0.165.1
+
+providers:
+  - gomod: go.opentelemetry.io/collector/confmap/provider/fileprovider v1.47.0
+  - gomod: go.opentelemetry.io/collector/confmap/provider/envprovider v1.47.0

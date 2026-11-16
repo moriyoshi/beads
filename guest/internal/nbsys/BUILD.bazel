@@ -1,0 +1,15 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "nbsys",
+    srcs = ["nbsys_netbsd.go"],
+    importpath = "github.com/moriyoshi/beads/guest/internal/nbsys",
+    visibility = ["//guest:__subpackages__"],
+    deps = select({
+        "@rules_go//go/platform:netbsd": [
+            "@org_golang_x_net//route",
+            "@org_golang_x_sys//unix",
+        ],
+        "//conditions:default": [],
+    }),
+)

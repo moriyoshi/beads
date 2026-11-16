@@ -1,0 +1,17 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "rootfs",
+    srcs = [
+        "base.go",
+        "rootfs.go",
+    ],
+    importpath = "github.com/moriyoshi/beads/internal/rootfs",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "rootfs_test",
+    srcs = ["rootfs_test.go"],
+    embed = [":rootfs"],
+)

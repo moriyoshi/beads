@@ -1,0 +1,8 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "runfiles",
+    srcs = ["runfiles.go"],
+    importpath = "github.com/moriyoshi/beads/internal/runfiles",
+    visibility = ["//:__subpackages__"],
+)

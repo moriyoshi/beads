@@ -1,0 +1,137 @@
+load("@rules_go//go:def.bzl", "go_test")
+load("//image:defs.bzl", "netbsd_go_appliance")
+
+# What the boot tests require the guest to ship over OTLP, through the
+# collector embedded in init: the program's stdout and stderr, and init's own
+# messages, including the last ones before power-off.
+_LOGS = [
+    "hello: listening on :8080",
+    "started /app/hello",
+    "hello: stopped",
+]
+
+# Traces and metrics from the program's own OpenTelemetry SDK, which init
+# points at the collector with the standard OTEL_* variables.
+_SPANS = ["hello.request"]
+
+_METRICS = ["hello.requests"]
+
+# What the boot tests require after pressing the ACPI power button: init
+# catches it, the program gets SIGTERM and exits, then init powers off.
+_SHUTDOWN = [
+    "nbinit: stopping for poweroff",
+    "hello: shutting down",
+    "hello: stopped",
+    "nbinit: poweroff",
+]
+
+# The example appliance: the CLOUD kernel plus //e2e/hello, trusting curl's
+# extract of Mozilla's CA store. Its boot and smoke tests launch it with
+# hello.env as user-data, which init turns into the program's environment:
+# the greeting comes from there.
+netbsd_go_appliance(
+    name = "hello_image",
+    args = ["-listen=:8080"],
+    binary = "//e2e/hello",
+    ca_bundle = "@curl_ca_bundle//:cacert.pem",
+    env = {"HELLO_GREETING": "hello"},
+    http_expect = "howdy from netbsd/amd64",
+    http_port = 8080,
+    logs_expect = _LOGS,
+    metrics_expect = _METRICS,
+    release = "@netbsd_11_1_amd64//:release",
+    shutdown_expect = _SHUTDOWN,
+    spans_expect = _SPANS,
+    user_data = "hello.env",
+)
+
+# The same program for arm64 (QEMU virt here; AWS Graviton on EC2), also
+# exercising the hostmetrics receiver on NetBSD, and user-data in the JSON
+# form: an array of {"key", "value"} pairs. (JSON has no comments, so
+# hello.json carries no license header.)
+netbsd_go_appliance(
+    name = "hello_arm64_image",
+    arch = "aarch64",
+    args = ["-listen=:8080"],
+    binary = "//e2e/hello",
+    http_expect = "howdy from netbsd/arm64",
+    http_port = 8080,
+    logs_expect = _LOGS,
+    metrics_expect = _METRICS + [
+        "system.cpu.time",
+        "system.filesystem.usage",
+        "system.memory.usage",
+        "system.paging.usage",
+    ],
+    otel = {"host_metrics": "true"},
+    release = "@netbsd_11_1_aarch64//:release",
+    shutdown_expect = _SHUTDOWN,
+    spans_expect = _SPANS,
+    user_data = "hello.json",
+)
+
+# A custom collector configuration that references a variable from
+# user-data, which init passes to the collector with otel user_data_env.
+netbsd_go_appliance(
+    name = "hello_custom_otel_image",
+    args = ["-listen=:8080"],
+    binary = "//e2e/hello",
+    boot_tests = ["bios/virtio"],
+    clouds = [],
+    http_expect = "hello from netbsd/amd64",
+    http_port = 8080,
+    logs_expect = _LOGS,
+    metrics_expect = _METRICS,
+    otel = {"user_data_env": "true"},
+    otel_config = "otelcol.yaml",
+    release = "@netbsd_11_1_amd64//:release",
+    shutdown_expect = _SHUTDOWN,
+    spans_expect = _SPANS,
+    user_data = "hello_otel.env",
+)
+
+# The same program on the release's stock GENERIC kernel, as a baseline.
+netbsd_go_appliance(
+    name = "hello_generic_image",
+    args = ["-listen=:8080"],
+    binary = "//e2e/hello",
+    boot_tests = ["bios/virtio"],
+    clouds = [],
+    http_expect = "hello from netbsd/amd64",
+    http_port = 8080,
+    kernel = "GENERIC",
+    logs_expect = _LOGS,
+    metrics_expect = _METRICS,
+    release = "@netbsd_11_1_amd64//:release",
+    shutdown_expect = _SHUTDOWN,
+    spans_expect = _SPANS,
+)
+
+filegroup(
+    name = "hello_image_manifest",
+    srcs = [":hello_image.rootfs"],
+    output_group = "manifest",
+)
+
+filegroup(
+    name = "hello_generic_image_manifest",
+    srcs = [":hello_generic_image.rootfs"],
+    output_group = "manifest",
+)
+
+# Checks what the rules put into the images, without booting them.
+go_test(
+    name = "e2e_test",
+    srcs = ["manifest_test.go"],
+    data = [
+        ":hello_generic_image_manifest",
+        ":hello_image_manifest",
+        "@curl_ca_bundle//:cacert.pem",
+    ],
+    env = {
+        "CURL_BUNDLE": "$(rlocationpath @curl_ca_bundle//:cacert.pem)",
+        "GENERIC_MANIFEST": "$(rlocationpath :hello_generic_image_manifest)",
+        "HELLO_MANIFEST": "$(rlocationpath :hello_image_manifest)",
+    },
+    deps = ["@rules_go//go/runfiles"],
+)

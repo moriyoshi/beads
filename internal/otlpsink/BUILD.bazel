@@ -1,0 +1,15 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "otlpsink",
+    srcs = ["otlpsink.go"],
+    importpath = "github.com/moriyoshi/beads/internal/otlpsink",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "@io_opentelemetry_go_proto_otlp//collector/logs/v1:logs",
+        "@io_opentelemetry_go_proto_otlp//collector/metrics/v1:metrics",
+        "@io_opentelemetry_go_proto_otlp//collector/trace/v1:trace",
+        "@org_golang_google_protobuf//encoding/protojson",
+        "@org_golang_google_protobuf//proto",
+    ],
+)

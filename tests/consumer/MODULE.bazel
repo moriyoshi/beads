@@ -1,0 +1,25 @@
+# Copyright 2026 Moriyoshi Koizumi
+# SPDX-License-Identifier: Apache-2.0
+
+# A workspace that uses beads the way consumers do: as a non-root bzlmod
+# dependency. That gives beads' repositories canonical names such as
+# "beads++netbsd+netbsd_11_1_amd64_tools", which once broke build.sh.
+module(name = "beads_consumer")
+
+bazel_dep(name = "beads", version = "0.0.0")
+local_path_override(
+    module_name = "beads",
+    path = "../..",
+)
+
+bazel_dep(name = "rules_go", version = "0.65.0")
+
+go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
+go_sdk.download(version = "1.27.4")
+
+netbsd = use_extension("@beads//netbsd:extensions.bzl", "netbsd")
+netbsd.release(
+    arch = "amd64",
+    version = "11.1",
+)
+use_repo(netbsd, "curl_ca_bundle", "netbsd_11_1_amd64")

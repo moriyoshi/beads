@@ -1,0 +1,22 @@
+# Copyright 2026 Moriyoshi Koizumi
+# SPDX-License-Identifier: Apache-2.0
+
+load("@beads//image:defs.bzl", "netbsd_go_appliance")
+load("@rules_go//go:def.bzl", "go_binary")
+
+go_binary(
+    name = "app",
+    srcs = ["main.go"],
+)
+
+netbsd_go_appliance(
+    name = "app_image",
+    args = ["-listen=:8080"],
+    binary = ":app",
+    boot_tests = ["uefi/virtio"],
+    ca_bundle = "@curl_ca_bundle//:cacert.pem",
+    clouds = [],
+    http_expect = "consumer ok",
+    http_port = 8080,
+    release = "@netbsd_11_1_amd64//:release",
+)

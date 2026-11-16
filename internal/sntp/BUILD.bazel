@@ -1,0 +1,17 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "sntp",
+    srcs = [
+        "server.go",
+        "sntp.go",
+    ],
+    importpath = "github.com/moriyoshi/beads/internal/sntp",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "sntp_test",
+    srcs = ["sntp_test.go"],
+    embed = [":sntp"],
+)

@@ -1,0 +1,17 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "dhcp",
+    srcs = [
+        "client.go",
+        "packet.go",
+    ],
+    importpath = "github.com/moriyoshi/beads/guest/internal/dhcp",
+    visibility = ["//guest:__subpackages__"],
+)
+
+go_test(
+    name = "dhcp_test",
+    srcs = ["client_test.go"],
+    embed = [":dhcp"],
+)

@@ -1,0 +1,18 @@
+# Bazel
+/bazel-*
+/user.bazelrc
+/.ijwb/
+/.clwb/
+/.bsp/
+
+# Editors and IDEs
+/.idea/
+/.vscode/
+*.swp
+*~
+
+# OS
+.DS_Store
+
+# Claude Code per-user settings
+/.claude/settings.local.json

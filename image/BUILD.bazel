@@ -1,0 +1,7 @@
+exports_files(
+    [
+        "defs.bzl",
+        "transitions.bzl",
+    ],
+    visibility = ["//visibility:public"],
+)

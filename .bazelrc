@@ -1,0 +1,21 @@
+common --enable_bzlmod
+build --incompatible_strict_action_env
+
+# Kernel builds are reproducible, so a shared cache saves rebuilding them
+# after `bazel clean` or in other checkouts. Point --remote_cache at a server
+# in user.bazelrc to share them between machines.
+build --disk_cache=~/.cache/beads/disk
+test --test_output=errors
+
+# Boot tests run QEMU; under TCG emulation (e.g. x86 guests on Apple Silicon)
+# two at a time is a good balance.
+test --local_test_jobs=2
+
+# Cloud smoke tests need credentials from the real environment, e.g.
+#   bazel test --config=cloud //e2e:hello_image_ec2_smoke_test
+# with AWS_PROFILE (or AWS_* keys) and AWS_REGION set.
+test:cloud --test_env=HOME --test_env=AWS_PROFILE --test_env=AWS_REGION
+test:cloud --test_env=AWS_ACCESS_KEY_ID --test_env=AWS_SECRET_ACCESS_KEY --test_env=AWS_SESSION_TOKEN
+test:cloud --test_output=streamed
+
+try-import %workspace%/user.bazelrc
