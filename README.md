@@ -1,5 +1,7 @@
 # beads
 
+<img src="./assets/daemon.webp" width="512" />
+
 Bazel rules that package a Go program as a bootable NetBSD appliance image:
 a NetBSD kernel, a small Go init, and your program. Nothing else is in the
 image: no shell, no libc, no rc scripts.
