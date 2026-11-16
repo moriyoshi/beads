@@ -6,6 +6,7 @@ package main
 import (
 	"net"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -96,6 +97,83 @@ func TestCollectorEnviron(t *testing.T) {
 	want := []string{"HOME=/", "PATH=/sbin", "TMPDIR=/tmp", "BEADS_PLATFORM=ec2", "EMPTY=", "LOG_GROUP=g"}
 	if !reflect.DeepEqual(env, want) || !reflect.DeepEqual(names, []string{"EMPTY", "LOG_GROUP"}) {
 		t.Errorf("env %v, names %v; want %v", env, names, want)
+	}
+}
+
+func TestLoopbackAddrsFromUserData(t *testing.T) {
+	c, err := parseConfig([]byte(`{"exec":"/a"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	names, refused, err := c.setUserEnv([]byte(`{"EGRESS_PROXY_PORT":"4750","APPLIANCE_LOOPBACK_ADDRS":"192.168.255.1/32","APPLIANCE_X":"y"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Init's setting, so neither a program variable nor refused.
+	if !reflect.DeepEqual(names, []string{"EGRESS_PROXY_PORT"}) || !reflect.DeepEqual(refused, []string{"APPLIANCE_X"}) {
+		t.Errorf("names %v, refused %v", names, refused)
+	}
+	if c.loopbackAddrs != "192.168.255.1/32" {
+		t.Errorf("loopbackAddrs = %q", c.loopbackAddrs)
+	}
+
+	// Still read with user_data_env off, which concerns the program only.
+	c, err = parseConfig([]byte(`{"exec":"/a","user_data_env":false}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	names, _, err = c.setUserEnv([]byte("APPLIANCE_LOOPBACK_ADDRS=10.1.2.3\nA=b\n"))
+	if err != nil || names != nil || c.userEnv != nil || c.loopbackAddrs != "10.1.2.3" {
+		t.Errorf("opted out: names %v, userEnv %v, loopbackAddrs %q, err %v", names, c.userEnv, c.loopbackAddrs, err)
+	}
+}
+
+func TestParseLoopbackAddrs(t *testing.T) {
+	for in, want := range map[string]string{
+		"":                                "",
+		"  ":                              "",
+		"192.168.255.1/32":                "192.168.255.1",
+		"192.168.255.1":                   "192.168.255.1",
+		" 192.168.255.1/32 , 10.200.0.7 ": "192.168.255.1 10.200.0.7",
+		"203.0.113.9/32,198.51.100.1/32":  "203.0.113.9 198.51.100.1",
+	} {
+		addrs, err := parseLoopbackAddrs(in)
+		if err != nil {
+			t.Errorf("%q: %v", in, err)
+			continue
+		}
+		var got []string
+		for _, a := range addrs {
+			got = append(got, a.String())
+		}
+		if g := strings.Join(got, " "); g != want {
+			t.Errorf("%q: got %q, want %q", in, g, want)
+		}
+	}
+	for _, in := range []string{
+		"192.168.255.1/24",
+		"192.168.255.0/24",
+		"192.168.255.1,",
+		"192.168.255.1,,10.0.0.1",
+		"192.168.255.1 10.0.0.1",
+		"192.168.255.1;10.0.0.1",
+		"192.168.255",
+		"192.168.255.256",
+		"example.com",
+		"fd00::1",
+		"fd00::1/128",
+		"::ffff:192.168.255.1",
+		"0.0.0.0",
+		"127.0.0.2",
+		"169.254.169.254",
+		"224.0.0.1",
+		"240.0.0.1",
+		"255.255.255.255",
+		"10.0.0.1,10.0.0.1/32",
+	} {
+		if addrs, err := parseLoopbackAddrs(in); err == nil {
+			t.Errorf("%q: accepted as %v", in, addrs)
+		}
 	}
 }
 

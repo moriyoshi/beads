@@ -10,6 +10,14 @@ _LOGS = [
     "hello: stopped",
 ]
 
+# What the program logs when user-data puts 192.168.255.1 on lo0
+# (APPLIANCE_LOOPBACK_ADDRS): it answers there, and its own connections still
+# leave from the interface's address.
+_ALIAS_LOGS = [
+    "hello: answered on 192.168.255.1:8080",
+    "hello: outbound source is not a loopback alias",
+]
+
 # Traces and metrics from the program's own OpenTelemetry SDK, which init
 # points at the collector with the standard OTEL_* variables.
 _SPANS = ["hello.request"]
@@ -28,7 +36,7 @@ _SHUTDOWN = [
 # The example appliance: the CLOUD kernel plus //e2e/hello, trusting curl's
 # extract of Mozilla's CA store. Its boot and smoke tests launch it with
 # hello.env as user-data, which init turns into the program's environment:
-# the greeting comes from there.
+# the greeting comes from there, and so does a loopback alias.
 netbsd_go_appliance(
     name = "hello_image",
     args = ["-listen=:8080"],
@@ -37,7 +45,7 @@ netbsd_go_appliance(
     env = {"HELLO_GREETING": "hello"},
     http_expect = "howdy from netbsd/amd64",
     http_port = 8080,
-    logs_expect = _LOGS,
+    logs_expect = _LOGS + _ALIAS_LOGS,
     metrics_expect = _METRICS,
     release = "@netbsd_11_1_amd64//:release",
     shutdown_expect = _SHUTDOWN,
@@ -47,7 +55,7 @@ netbsd_go_appliance(
 
 # The same program for arm64 (QEMU virt here; AWS Graviton on EC2), also
 # exercising the hostmetrics receiver on NetBSD, and user-data in the JSON
-# form: an array of {"key", "value"} pairs. (JSON has no comments, so
+# form: an array of {"key", "value"} pairs, with the same loopback alias. (JSON has no comments, so
 # hello.json carries no license header.)
 netbsd_go_appliance(
     name = "hello_arm64_image",
@@ -56,7 +64,7 @@ netbsd_go_appliance(
     binary = "//e2e/hello",
     http_expect = "howdy from netbsd/arm64",
     http_port = 8080,
-    logs_expect = _LOGS,
+    logs_expect = _LOGS + _ALIAS_LOGS,
     metrics_expect = _METRICS + [
         "system.cpu.time",
         "system.filesystem.usage",

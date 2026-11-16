@@ -6,6 +6,8 @@
 // shuts down gracefully on SIGTERM, and, when init
 // points it at a collector through the standard OTEL_* variables, records
 // a span per request and a request counter with the OpenTelemetry SDK.
+// Given $APPLIANCE_LOOPBACK_ADDRS, it checks that it answers on those
+// addresses and that its own connections do not leave from them.
 package main
 
 import (
@@ -15,10 +17,13 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -63,6 +68,49 @@ func setupTelemetry(ctx context.Context) (func(context.Context), error) {
 		tp.Shutdown(ctx)
 		mp.Shutdown(ctx) // exports the final readings
 	}, nil
+}
+
+// checkLoopbackAddrs GETs / on each address init added to lo0, as listed
+// in $APPLIANCE_LOOPBACK_ADDRS, and checks that the kernel does not pick one
+// of them as the source of an outbound connection; the boot tests look for
+// the results in the log.
+func checkLoopbackAddrs(port int) {
+	v := os.Getenv("APPLIANCE_LOOPBACK_ADDRS")
+	if v == "" {
+		return
+	}
+	aliases := map[string]bool{}
+	client := &http.Client{Timeout: 5 * time.Second}
+	for _, cidr := range strings.Split(v, ",") {
+		ip, _, err := net.ParseCIDR(cidr)
+		if err != nil {
+			log.Printf("hello: APPLIANCE_LOOPBACK_ADDRS: %v", err)
+			continue
+		}
+		aliases[ip.String()] = true
+		addr := net.JoinHostPort(ip.String(), strconv.Itoa(port))
+		resp, err := client.Get("http://" + addr + "/")
+		if err != nil {
+			log.Printf("hello: no answer on %s: %v", addr, err)
+			continue
+		}
+		resp.Body.Close()
+		log.Printf("hello: answered on %s", addr)
+	}
+	// Connecting a UDP socket sends nothing, but makes the kernel choose the
+	// source address as it would for any outbound connection.
+	c, err := net.Dial("udp", "192.0.2.1:9")
+	if err != nil {
+		log.Printf("hello: outbound source: %v", err)
+		return
+	}
+	src := c.LocalAddr().(*net.UDPAddr).IP
+	c.Close()
+	if aliases[src.String()] {
+		log.Printf("hello: outbound source is the loopback alias %s", src)
+	} else {
+		log.Printf("hello: outbound source is not a loopback alias (%s)", src)
+	}
 }
 
 func main() {
@@ -111,8 +159,13 @@ func main() {
 	} else {
 		log.Printf("hello: no system CA pool: %v", err)
 	}
+	ln, err := net.Listen("tcp", *listen)
+	if err != nil {
+		log.Fatal(err)
+	}
 	log.Printf("hello: listening on %s", *listen)
-	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+	go checkLoopbackAddrs(ln.Addr().(*net.TCPAddr).Port)
+	if err := srv.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
 	sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

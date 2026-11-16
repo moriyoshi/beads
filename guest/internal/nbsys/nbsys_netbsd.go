@@ -535,3 +535,17 @@ func SetSysctlInt(name string, v int32) error {
 	}
 	return nil
 }
+
+// SysctlInt reads an integer sysctl by name.
+func SysctlInt(name string) (int32, error) {
+	mib, err := sysctlMIB(name)
+	if err != nil {
+		return 0, err
+	}
+	var v int32
+	n := unsafe.Sizeof(v)
+	if err := rawSysctl(mib, (*byte)(unsafe.Pointer(&v)), &n, nil, 0); err != nil {
+		return 0, fmt.Errorf("sysctl %s: %w", name, err)
+	}
+	return v, nil
+}
