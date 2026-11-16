@@ -128,6 +128,25 @@ func TestLocalAddrsFromUserData(t *testing.T) {
 	}
 }
 
+func TestHealthFromUserData(t *testing.T) {
+	c, err := parseConfig([]byte(`{"exec":"/a","user_data_env":false}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	names, refused, err := c.setUserEnv([]byte(`{"APPLIANCE_CLOUDMAP_SERVICE_ID":"srv-1","APPLIANCE_HEALTH_CHECK":"tcp://127.0.0.1:4750","APPLIANCE_HEALTH_INTERVAL":5}`))
+	if err != nil || names != nil || refused != nil {
+		t.Fatalf("names %v, refused %v, err %v", names, refused, err)
+	}
+	want := map[string]string{
+		"APPLIANCE_CLOUDMAP_SERVICE_ID": "srv-1",
+		"APPLIANCE_HEALTH_CHECK":        "tcp://127.0.0.1:4750",
+		"APPLIANCE_HEALTH_INTERVAL":     "5",
+	}
+	if !reflect.DeepEqual(c.healthEnv, want) {
+		t.Errorf("healthEnv = %v, want %v", c.healthEnv, want)
+	}
+}
+
 func TestParseLocalAddrs(t *testing.T) {
 	for in, want := range map[string]string{
 		"":                                "",

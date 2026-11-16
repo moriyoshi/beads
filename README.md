@@ -197,8 +197,10 @@ aws ec2 run-instances --image-id ami-... --user-data file://env.json ...
 - **Precedence:** user-data overrides the image's `env`, which overrides
   what init discovers about the instance. User-data can't set `PATH`,
   `HOME`, `TMPDIR`, `APPLIANCE_*` or `OTEL_*`; init ignores those and logs
-  their names. The exception is `APPLIANCE_LOCAL_ADDRS`, which is a
-  setting for init; see [Extra local addresses](#extra-local-addresses-overlay-ips).
+  their names. The exceptions are `APPLIANCE_LOCAL_ADDRS` and the health
+  settings, which are settings for init; see
+  [Extra local addresses](#extra-local-addresses-overlay-ips) and
+  [Health reporting to AWS Cloud Map](#health-reporting-to-aws-cloud-map).
 - **Secrets:** the console log shows variable names, never values. Anyone
   who can read the instance's user-data (on EC2: `ec2:DescribeInstanceAttribute`,
   or any process on the instance) can read the values.
@@ -266,6 +268,63 @@ APIs and needs no IAM.
   sets `192.168.255.1/32`. The program connects to itself there and checks
   that its own outbound source is not the alias, and the boot tests require
   both results in the shipped logs.
+
+## Health reporting to AWS Cloud Map
+
+On EC2, init can probe the program and report the result as the custom
+health status of the instance's AWS Cloud Map registration. Cloud Map then
+leaves an unhealthy instance out of DNS answers and `DiscoverInstances`.
+Init does not register or deregister the instance; that is up to whoever
+manages the Cloud Map service.
+
+```json
+{
+  "APPLIANCE_CLOUDMAP_SERVICE_ID": "srv-0123456789abcdef",
+  "APPLIANCE_HEALTH_CHECK": "tcp://127.0.0.1:4750"
+}
+```
+
+| User-data variable | Default | Meaning |
+|---|---|---|
+| `APPLIANCE_CLOUDMAP_SERVICE_ID` | unset: off | Cloud Map service ID (`srv-...`) |
+| `APPLIANCE_CLOUDMAP_INSTANCE_ID` | the EC2 instance ID | Cloud Map instance ID of the registration |
+| `APPLIANCE_HEALTH_CHECK` | required | `tcp://host:port` (or bare `host:port`): connect; `http://host:port/path`: GET |
+| `APPLIANCE_HEALTH_HTTP_STATUS` | `200-399` | statuses that count as healthy for `http://`: codes and ranges, comma-separated |
+| `APPLIANCE_HEALTH_INTERVAL` | `10s` | time between probes; a Go duration or whole seconds, at least 1s |
+| `APPLIANCE_HEALTH_TIMEOUT` | `3s` | per probe; at most the interval |
+| `APPLIANCE_HEALTH_HEALTHY_THRESHOLD` | `2` | consecutive successes that make the instance `HEALTHY` |
+| `APPLIANCE_HEALTH_UNHEALTHY_THRESHOLD` | `3` | consecutive failures that make it `UNHEALTHY` |
+
+- **Reporting:** `servicediscovery:UpdateInstanceCustomHealthStatus`, signed
+  with the instance profile's credentials from IMDSv2, in the instance's
+  region. Init reports when the status changes and again every 5 minutes, in
+  case a report was lost or the registration was recreated. Until the
+  thresholds first decide, it reports nothing.
+- **Shutdown:** on an orderly shutdown, init reports `UNHEALTHY`, giving up
+  after 5 seconds. On a power button press or a signal to init, it does so
+  before it sends the program SIGTERM; when the program exits and `on_exit`
+  is not `restart`, it does so before powering off.
+- **Failures don't stop anything:** a failed report (no credentials,
+  access denied, no network) is logged and retried at the next probe; the
+  program keeps running. A bad setting is logged and leaves reporting off,
+  since the program works without it. Off EC2, reporting is off too.
+- **AWS setup:** the Cloud Map service needs a custom health check
+  (`HealthCheckCustomConfig`, Terraform `health_check_custom_config {}`),
+  which can only be set when the service is created. The instance role needs
+  `servicediscovery:UpdateInstanceCustomHealthStatus` on the service's ARN
+  (`arn:aws:servicediscovery:<region>:<account>:service/srv-...`). Without the
+  custom health check the call fails with `CustomHealthNotFound`.
+- **What you can check:** the console and shipped logs show
+  `health: ...` lines: the settings at boot, probe failures (once per
+  distinct error), status changes, and report successes and failures. With
+  telemetry on, init also sends metrics to the collector every 60 seconds:
+  - `beads.health.probes`: counter, attribute `result` = `success`/`failure`;
+  - `beads.health.reports`: counter, attributes `status` and `result` =
+    `ok`/`error`;
+  - `beads.health.status`: gauge, 1 healthy, 0 unhealthy, absent until
+    decided.
+- **`user_data_env = False`** does not disable these settings, and none of
+  them reach the program's environment.
 
 ## Time synchronization
 

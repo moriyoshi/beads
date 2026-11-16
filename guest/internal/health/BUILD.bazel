@@ -1,0 +1,39 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "health",
+    srcs = [
+        "cloudmap.go",
+        "config.go",
+        "monitor.go",
+        "probe.go",
+    ],
+    importpath = "github.com/moriyoshi/beads/guest/internal/health",
+    visibility = ["//guest:__subpackages__"],
+    deps = [
+        "@com_github_aws_aws_sdk_go_v2//aws",
+        "@com_github_aws_aws_sdk_go_v2_credentials//ec2rolecreds",
+        "@com_github_aws_aws_sdk_go_v2_service_servicediscovery//:servicediscovery",
+        "@com_github_aws_aws_sdk_go_v2_service_servicediscovery//types",
+        "@io_opentelemetry_go_otel//attribute",
+        "@io_opentelemetry_go_otel_metric//:metric",
+        "@io_opentelemetry_go_otel_metric//noop",
+    ],
+)
+
+go_test(
+    name = "health_test",
+    srcs = [
+        "cloudmap_test.go",
+        "config_test.go",
+        "monitor_test.go",
+        "probe_test.go",
+    ],
+    embed = [":health"],
+    deps = [
+        "@com_github_aws_aws_sdk_go_v2//aws",
+        "@com_github_aws_aws_sdk_go_v2_credentials//:credentials",
+        "@io_opentelemetry_go_otel_sdk_metric//:metric",
+        "@io_opentelemetry_go_otel_sdk_metric//metricdata",
+    ],
+)
