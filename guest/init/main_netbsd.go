@@ -293,12 +293,14 @@ func discoverInstance(cfg *Config) *metadata.Info {
 // as JSON or KEY=VALUE lines, to the program's environment. Only names are logged:
 // values may be secrets, and the console is often readable by others.
 func applyUserDataEnv(cfg *Config, ud []byte) {
-	if len(ud) == 0 || !cfg.useUserDataEnv() {
+	if len(ud) == 0 {
 		return
 	}
 	names, refused, err := cfg.setUserEnv(ud)
 	if err != nil {
-		logf("user-data: not an environment (%v); not using it", err)
+		if cfg.useUserDataEnv() {
+			logf("user-data: not an environment (%v); not using it", err)
+		}
 		return
 	}
 	if len(refused) > 0 {
@@ -307,6 +309,64 @@ func applyUserDataEnv(cfg *Config, ud []byte) {
 	if len(names) > 0 {
 		logf("user-data: environment %s", strings.Join(names, " "))
 	}
+}
+
+// configureLocalAddrs adds the addresses user-data lists in
+// LocalAddrsKey to lo0 as /32 aliases, so that the kernel accepts packets
+// a router sends to them, such as an AWS overlay IP routed to this
+// instance's interface. Replies leave from the alias; connections the program
+// opens still leave from the interface's own address, as the kernel picks the
+// source from the outgoing route. The result goes to the console, to
+// /var/run/appliance/local-addrs and to the program's environment.
+func configureLocalAddrs(cfg *Config) error {
+	addrs, err := parseLocalAddrs(cfg.localAddrs)
+	if err != nil {
+		return fmt.Errorf("user-data: %w", err)
+	}
+	var cidrs []string
+	if len(addrs) > 0 {
+		have, err := net.InterfaceAddrs()
+		if err != nil {
+			return err
+		}
+		for _, a := range addrs {
+			for _, h := range have {
+				if n, ok := h.(*net.IPNet); ok && n.IP.Equal(net.IP(a.AsSlice())) {
+					return fmt.Errorf("user-data: %s: %s is already assigned (%s)", LocalAddrsKey, a, n)
+				}
+			}
+		}
+		// Accepting a packet for a local address that arrived on another
+		// interface is the weak host model, NetBSD's default; make sure.
+		if err := nbsys.SetSysctlInt("net.inet.ip.checkinterface", 0); err != nil {
+			logf("warning: %v", err)
+		}
+		for _, a := range addrs {
+			if err := nbsys.AddAddr("lo0", net.IP(a.AsSlice()), net.CIDRMask(32, 32), nil); err != nil {
+				return err
+			}
+			cidrs = append(cidrs, a.String()+"/32")
+		}
+		logf("network: lo0 aliases %s", strings.Join(cidrs, " "))
+		// The guest must not route what arrives for other addresses, which
+		// it may be sent where the platform's source/destination check is off.
+		for _, name := range []string{"net.inet.ip.checkinterface", "net.inet.ip.forwarding"} {
+			if v, err := nbsys.SysctlInt(name); err != nil {
+				logf("warning: %v", err)
+			} else {
+				logf("network: %s = %d", name, v)
+			}
+		}
+		cfg.addPlatformEnv(map[string]string{LocalAddrsKey: strings.Join(cidrs, ",")})
+	}
+	var content strings.Builder
+	for _, c := range cidrs {
+		content.WriteString(c + "\n")
+	}
+	if err := os.WriteFile(metadataDir+"/local-addrs", []byte(content.String()), 0o644); err != nil {
+		logf("network: %v", err)
+	}
+	return nil
 }
 
 // startTimesync sets the clock from the configured or platform time servers
@@ -773,6 +833,12 @@ func main() {
 	info := discoverInstance(cfg)
 	startTimesync(cfg, info, lease)
 	startLogging(cfg, info, lease)
+	// After startLogging, so that a fatal error here is shipped too. A bad
+	// value stops the appliance rather than start the program without
+	// addresses it is meant to answer on.
+	if err := configureLocalAddrs(cfg); err != nil {
+		fatal(err)
+	}
 	logf("ready")
 	supervise(cfg, power)
 }

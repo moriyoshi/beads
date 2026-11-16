@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"path"
 	"sort"
@@ -64,7 +65,14 @@ type Config struct {
 	// userEnv comes from user-data and overrides Env, except for the
 	// variables reservedEnv protects.
 	userEnv map[string]string
+	// localAddrs is user-data's LocalAddrsKey, unparsed.
+	localAddrs string
 }
+
+// LocalAddrsKey names the user-data variable that lists extra local
+// IPv4 addresses for lo0, such as an AWS overlay IP. It is a setting for init,
+// not a variable for the program.
+const LocalAddrsKey = "APPLIANCE_LOCAL_ADDRS"
 
 func (c *Config) addPlatformEnv(env map[string]string) {
 	if c.platformEnv == nil {
@@ -112,13 +120,19 @@ func reservedEnv(k string) bool {
 	return strings.HasPrefix(k, "APPLIANCE_") || strings.HasPrefix(k, "OTEL_")
 }
 
-// setUserEnv parses user-data as variables (metadata.ParseUserDataEnv)
-// and records the variables for the program. It returns, sorted, the names
-// it took and those it refused because they are reserved.
+// setUserEnv parses user-data as variables (metadata.ParseUserDataEnv),
+// takes init's own settings from it, and, if useUserDataEnv, records the
+// variables for the program. It returns, sorted, the names it took and those
+// it refused because they are reserved.
 func (c *Config) setUserEnv(userData []byte) (names, refused []string, err error) {
 	env, err := metadata.ParseUserDataEnv(userData)
 	if err != nil {
 		return nil, nil, err
+	}
+	c.localAddrs = env[LocalAddrsKey]
+	delete(env, LocalAddrsKey)
+	if !c.useUserDataEnv() {
+		return nil, nil, nil
 	}
 	c.userEnv = map[string]string{}
 	for k, v := range env {
@@ -132,6 +146,46 @@ func (c *Config) setUserEnv(userData []byte) (names, refused []string, err error
 	sort.Strings(names)
 	sort.Strings(refused)
 	return names, refused, nil
+}
+
+// parseLocalAddrs parses a LocalAddrsKey value: comma-separated IPv4
+// addresses, each bare or with /32. Addresses that would shadow something
+// else (loopback, link-local, multicast, ...) and duplicates are errors.
+func parseLocalAddrs(s string) ([]netip.Addr, error) {
+	if strings.TrimSpace(s) == "" {
+		return nil, nil
+	}
+	var addrs []netip.Addr
+	seen := map[netip.Addr]bool{}
+	for _, f := range strings.Split(s, ",") {
+		f = strings.TrimSpace(f)
+		if f == "" {
+			return nil, fmt.Errorf("%s: empty entry in %q", LocalAddrsKey, s)
+		}
+		a, err := netip.ParseAddr(f)
+		if err != nil {
+			p, perr := netip.ParsePrefix(f)
+			if perr != nil {
+				return nil, fmt.Errorf("%s: %q is not an IPv4 address or /32", LocalAddrsKey, f)
+			}
+			if p.Bits() != 32 || !p.Addr().Is4() {
+				return nil, fmt.Errorf("%s: %q: only IPv4 /32 addresses are allowed", LocalAddrsKey, f)
+			}
+			a = p.Addr()
+		}
+		switch {
+		case !a.Is4():
+			return nil, fmt.Errorf("%s: %q: only IPv4 /32 addresses are allowed", LocalAddrsKey, f)
+		case a.IsUnspecified(), a.IsLoopback(), a.IsLinkLocalUnicast(), a.IsMulticast(),
+			a == netip.AddrFrom4([4]byte{255, 255, 255, 255}), a.As4()[0] >= 240:
+			return nil, fmt.Errorf("%s: %q is not a usable unicast address", LocalAddrsKey, f)
+		case seen[a]:
+			return nil, fmt.Errorf("%s: %s is listed twice", LocalAddrsKey, a)
+		}
+		seen[a] = true
+		addrs = append(addrs, a)
+	}
+	return addrs, nil
 }
 
 func parseConfig(b []byte) (*Config, error) {

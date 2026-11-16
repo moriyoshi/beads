@@ -142,7 +142,8 @@ AWS_PROFILE=my-profile AWS_REGION=ap-northeast-1 \
 
 On boot, init reads SMBIOS to find out which platform it is on. On EC2 it also
 reads IMDSv2. It writes what it learns to `/var/run/appliance/`
-(`platform`, `instance-id`, `region`, `zone`, `local-ipv4`, `user-data`) and
+(`platform`, `instance-id`, `region`, `zone`, `local-ipv4`, `user-data`, and
+`local-addrs` and `timesync`, which report what init set up) and
 passes `APPLIANCE_PLATFORM`, `APPLIANCE_INSTANCE_ID` and `APPLIANCE_REGION` to
 the program. User-data written as `KEY=VALUE` lines also sets program
 environment variables; see [Environment from user-data](#environment-from-user-data).
@@ -193,7 +194,8 @@ aws ec2 run-instances --image-id ami-... --user-data file://env.json ...
 - **Precedence:** user-data overrides the image's `env`, which overrides
   what init discovers about the instance. User-data can't set `PATH`,
   `HOME`, `TMPDIR`, `APPLIANCE_*` or `OTEL_*`; init ignores those and logs
-  their names.
+  their names. The exception is `APPLIANCE_LOCAL_ADDRS`, which is a
+  setting for init; see [Extra local addresses](#extra-local-addresses-overlay-ips).
 - **Secrets:** the console log shows variable names, never values. Anyone
   who can read the instance's user-data (on EC2: `ec2:DescribeInstanceAttribute`,
   or any process on the instance) can read the values.
@@ -212,6 +214,55 @@ aws ec2 run-instances --image-id ami-... --user-data file://env.json ...
     checks this through IMDS.
   - `//e2e:hello_custom_otel_image` uses it to give the collector a variable
     its `otel_config` needs.
+
+## Extra local addresses (overlay IPs)
+
+`APPLIANCE_LOCAL_ADDRS` in user-data, in any of the forms above, lists
+extra IPv4 addresses for the instance to treat as its own:
+
+```json
+{"APPLIANCE_LOCAL_ADDRS": "192.168.255.1/32", "LISTEN_ADDR": ":4750"}
+```
+
+This is for the AWS "overlay IP" pattern. The address lies outside the VPC
+CIDR, and the VPC route tables send it to the active instance's ENI, which has
+source/destination check off. Something outside the guest (e.g. a Lambda
+calling `ReplaceRoute`) moves the route on failover. Init does not call AWS
+APIs and needs no IAM.
+
+- **What init does:** it adds each address to `lo0` as a /32 alias before
+  starting the program. A program listening on the wildcard address then
+  answers on it with no changes.
+- **Format:** comma-separated, each address bare or with `/32`; spaces
+  around entries are ignored, and an empty value means none.
+- **Kernel behaviour:** NetBSD uses the weak host model
+  (`net.inet.ip.checkinterface=0`; init sets it when aliases are configured),
+  so it accepts packets for the alias that arrive on `ena0`/`vioif0`.
+  - Replies on such connections leave from the alias.
+  - Connections the program opens still take their source from the outgoing
+    interface's address, so EIP/NAT mappings keep working.
+  - `net.inet.ip.forwarding` stays 0, so the guest does not route.
+  - The guest does not answer ARP for the alias. AWS routes to the ENI
+    without ARP, so this does not matter there.
+- **Errors stop the appliance:** init powers off without starting the
+  program, and the reason is on the console. This covers other prefix
+  lengths, IPv6, loopback, link-local, multicast, reserved or duplicate
+  entries, and addresses already assigned. Starting a standby that would
+  silently drop traffic for its overlay IP would hide the problem from
+  health checks.
+- **What you can check:**
+  - The console logs `network: lo0 aliases ...` along with the values of
+    `checkinterface` and `forwarding`.
+  - `/var/run/appliance/local-addrs` lists the aliases, one CIDR per line
+    (empty without any).
+  - The program gets `APPLIANCE_LOCAL_ADDRS` with the normalized list
+    (`192.168.255.1/32,...`).
+- **`user_data_env = False`** does not disable this setting; it only stops
+  user-data from reaching the program's environment.
+- **Tests:** the user-data of `//e2e:hello_image` and `hello_arm64_image`
+  sets `192.168.255.1/32`. The program connects to itself there and checks
+  that its own outbound source is not the alias, and the boot tests require
+  both results in the shipped logs.
 
 ## Time synchronization
 
