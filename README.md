@@ -177,9 +177,10 @@ aws ec2 run-instances --image-id ami-... --user-data file://env.json ...
 ```
 
 - **JSON object** (`{`): each member is a variable.
-- **JSON array** (`[`): elements are `{"key": ..., "value": ...}`. Field
-  names match case-insensitively, so AWS-style `Key`/`Value` works too.
-  Any other field is an error.
+- **JSON array** (`[`): elements are `{"key": ..., "value": ...}` or
+  `{"name": ..., "value": ...}` (the Kubernetes/ECS container-env shape).
+  Field names match case-insensitively, so AWS-style `Key`/`Value` works
+  too. Giving both `key` and `name`, or any other field, is an error.
 - **JSON values:** strings, numbers or booleans. Numbers and booleans
   become their JSON text (`4`, `false`). `null`, objects and arrays are
   errors.

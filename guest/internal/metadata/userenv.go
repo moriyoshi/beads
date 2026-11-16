@@ -16,11 +16,13 @@ import (
 //
 //	{"KEY": "value", ...}                       a JSON object
 //	[{"key": "KEY", "value": "value"}, ...]     a JSON array of pairs
+//	[{"name": "KEY", "value": "value"}, ...]    (or with "name" for "key")
 //	KEY=value                                   dotenv lines (ParseDotenv)
 //
 // JSON values may be strings, numbers or booleans; numbers and booleans
 // become their JSON text. Field names of the pairs match case-insensitively,
-// so AWS-style {"Key": ..., "Value": ...} works too. Later definitions of a
+// so AWS-style {"Key": ..., "Value": ...} works too, as does the
+// Kubernetes/ECS-style {"name": ..., "value": ...}. Later definitions of a
 // key win.
 func ParseUserDataEnv(b []byte) (map[string]string, error) {
 	b = bytes.TrimPrefix(b, []byte("\xef\xbb\xbf"))
@@ -50,6 +52,7 @@ func parseJSONObjectEnv(b []byte) (map[string]string, error) {
 func parseJSONPairsEnv(b []byte) (map[string]string, error) {
 	var pairs []struct {
 		Key   *string         `json:"key"`
+		Name  *string         `json:"name"`
 		Value json.RawMessage `json:"value"`
 	}
 	if err := decodeJSON(b, &pairs); err != nil {
@@ -57,8 +60,13 @@ func parseJSONPairsEnv(b []byte) (map[string]string, error) {
 	}
 	env := map[string]string{}
 	for i, p := range pairs {
-		if p.Key == nil {
-			return nil, fmt.Errorf("JSON: element %d has no \"key\"", i)
+		switch {
+		case p.Key != nil && p.Name != nil:
+			return nil, fmt.Errorf("JSON: element %d has both \"key\" and \"name\"", i)
+		case p.Key == nil && p.Name == nil:
+			return nil, fmt.Errorf("JSON: element %d has no \"key\" or \"name\"", i)
+		case p.Key == nil:
+			p.Key = p.Name
 		}
 		if p.Value == nil {
 			return nil, fmt.Errorf("JSON: %s has no \"value\"", *p.Key)
