@@ -6,7 +6,7 @@
 // shuts down gracefully on SIGTERM, and, when init
 // points it at a collector through the standard OTEL_* variables, records
 // a span per request and a request counter with the OpenTelemetry SDK.
-// Given $APPLIANCE_LOOPBACK_ADDRS, it checks that it answers on those
+// Given $APPLIANCE_LOCAL_ADDRS, it checks that it answers on those
 // addresses and that its own connections do not leave from them.
 package main
 
@@ -70,12 +70,12 @@ func setupTelemetry(ctx context.Context) (func(context.Context), error) {
 	}, nil
 }
 
-// checkLoopbackAddrs GETs / on each address init added to lo0, as listed
-// in $APPLIANCE_LOOPBACK_ADDRS, and checks that the kernel does not pick one
+// checkLocalAddrs GETs / on each address init added to lo0, as listed
+// in $APPLIANCE_LOCAL_ADDRS, and checks that the kernel does not pick one
 // of them as the source of an outbound connection; the boot tests look for
 // the results in the log.
-func checkLoopbackAddrs(port int) {
-	v := os.Getenv("APPLIANCE_LOOPBACK_ADDRS")
+func checkLocalAddrs(port int) {
+	v := os.Getenv("APPLIANCE_LOCAL_ADDRS")
 	if v == "" {
 		return
 	}
@@ -84,7 +84,7 @@ func checkLoopbackAddrs(port int) {
 	for _, cidr := range strings.Split(v, ",") {
 		ip, _, err := net.ParseCIDR(cidr)
 		if err != nil {
-			log.Printf("hello: APPLIANCE_LOOPBACK_ADDRS: %v", err)
+			log.Printf("hello: APPLIANCE_LOCAL_ADDRS: %v", err)
 			continue
 		}
 		aliases[ip.String()] = true
@@ -107,9 +107,9 @@ func checkLoopbackAddrs(port int) {
 	src := c.LocalAddr().(*net.UDPAddr).IP
 	c.Close()
 	if aliases[src.String()] {
-		log.Printf("hello: outbound source is the loopback alias %s", src)
+		log.Printf("hello: outbound source is one of APPLIANCE_LOCAL_ADDRS (%s)", src)
 	} else {
-		log.Printf("hello: outbound source is not a loopback alias (%s)", src)
+		log.Printf("hello: outbound source is not one of APPLIANCE_LOCAL_ADDRS (%s)", src)
 	}
 }
 
@@ -164,7 +164,7 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Printf("hello: listening on %s", *listen)
-	go checkLoopbackAddrs(ln.Addr().(*net.TCPAddr).Port)
+	go checkLocalAddrs(ln.Addr().(*net.TCPAddr).Port)
 	if err := srv.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}

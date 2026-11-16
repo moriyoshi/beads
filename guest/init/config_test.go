@@ -100,12 +100,12 @@ func TestCollectorEnviron(t *testing.T) {
 	}
 }
 
-func TestLoopbackAddrsFromUserData(t *testing.T) {
+func TestLocalAddrsFromUserData(t *testing.T) {
 	c, err := parseConfig([]byte(`{"exec":"/a"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	names, refused, err := c.setUserEnv([]byte(`{"EGRESS_PROXY_PORT":"4750","APPLIANCE_LOOPBACK_ADDRS":"192.168.255.1/32","APPLIANCE_X":"y"}`))
+	names, refused, err := c.setUserEnv([]byte(`{"EGRESS_PROXY_PORT":"4750","APPLIANCE_LOCAL_ADDRS":"192.168.255.1/32","APPLIANCE_X":"y"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,8 +113,8 @@ func TestLoopbackAddrsFromUserData(t *testing.T) {
 	if !reflect.DeepEqual(names, []string{"EGRESS_PROXY_PORT"}) || !reflect.DeepEqual(refused, []string{"APPLIANCE_X"}) {
 		t.Errorf("names %v, refused %v", names, refused)
 	}
-	if c.loopbackAddrs != "192.168.255.1/32" {
-		t.Errorf("loopbackAddrs = %q", c.loopbackAddrs)
+	if c.localAddrs != "192.168.255.1/32" {
+		t.Errorf("localAddrs = %q", c.localAddrs)
 	}
 
 	// Still read with user_data_env off, which concerns the program only.
@@ -122,13 +122,13 @@ func TestLoopbackAddrsFromUserData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	names, _, err = c.setUserEnv([]byte("APPLIANCE_LOOPBACK_ADDRS=10.1.2.3\nA=b\n"))
-	if err != nil || names != nil || c.userEnv != nil || c.loopbackAddrs != "10.1.2.3" {
-		t.Errorf("opted out: names %v, userEnv %v, loopbackAddrs %q, err %v", names, c.userEnv, c.loopbackAddrs, err)
+	names, _, err = c.setUserEnv([]byte("APPLIANCE_LOCAL_ADDRS=10.1.2.3\nA=b\n"))
+	if err != nil || names != nil || c.userEnv != nil || c.localAddrs != "10.1.2.3" {
+		t.Errorf("opted out: names %v, userEnv %v, localAddrs %q, err %v", names, c.userEnv, c.localAddrs, err)
 	}
 }
 
-func TestParseLoopbackAddrs(t *testing.T) {
+func TestParseLocalAddrs(t *testing.T) {
 	for in, want := range map[string]string{
 		"":                                "",
 		"  ":                              "",
@@ -137,7 +137,7 @@ func TestParseLoopbackAddrs(t *testing.T) {
 		" 192.168.255.1/32 , 10.200.0.7 ": "192.168.255.1 10.200.0.7",
 		"203.0.113.9/32,198.51.100.1/32":  "203.0.113.9 198.51.100.1",
 	} {
-		addrs, err := parseLoopbackAddrs(in)
+		addrs, err := parseLocalAddrs(in)
 		if err != nil {
 			t.Errorf("%q: %v", in, err)
 			continue
@@ -171,7 +171,7 @@ func TestParseLoopbackAddrs(t *testing.T) {
 		"255.255.255.255",
 		"10.0.0.1,10.0.0.1/32",
 	} {
-		if addrs, err := parseLoopbackAddrs(in); err == nil {
+		if addrs, err := parseLocalAddrs(in); err == nil {
 			t.Errorf("%q: accepted as %v", in, addrs)
 		}
 	}

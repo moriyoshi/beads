@@ -1,5 +1,5 @@
 [
   {"key": "HELLO_GREETING", "value": "howdy"},
-  {"key": "APPLIANCE_LOOPBACK_ADDRS", "value": "192.168.255.1/32"},
+  {"key": "APPLIANCE_LOCAL_ADDRS", "value": "192.168.255.1/32"},
   {"key": "OTEL_SERVICE_NAME", "value": "not-hello"}
 ]

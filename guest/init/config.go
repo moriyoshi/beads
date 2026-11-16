@@ -65,14 +65,14 @@ type Config struct {
 	// userEnv comes from user-data and overrides Env, except for the
 	// variables reservedEnv protects.
 	userEnv map[string]string
-	// loopbackAddrs is user-data's LoopbackAddrsKey, unparsed.
-	loopbackAddrs string
+	// localAddrs is user-data's LocalAddrsKey, unparsed.
+	localAddrs string
 }
 
-// LoopbackAddrsKey names the user-data variable that lists extra local
+// LocalAddrsKey names the user-data variable that lists extra local
 // IPv4 addresses for lo0, such as an AWS overlay IP. It is a setting for init,
 // not a variable for the program.
-const LoopbackAddrsKey = "APPLIANCE_LOOPBACK_ADDRS"
+const LocalAddrsKey = "APPLIANCE_LOCAL_ADDRS"
 
 func (c *Config) addPlatformEnv(env map[string]string) {
 	if c.platformEnv == nil {
@@ -129,8 +129,8 @@ func (c *Config) setUserEnv(userData []byte) (names, refused []string, err error
 	if err != nil {
 		return nil, nil, err
 	}
-	c.loopbackAddrs = env[LoopbackAddrsKey]
-	delete(env, LoopbackAddrsKey)
+	c.localAddrs = env[LocalAddrsKey]
+	delete(env, LocalAddrsKey)
 	if !c.useUserDataEnv() {
 		return nil, nil, nil
 	}
@@ -148,10 +148,10 @@ func (c *Config) setUserEnv(userData []byte) (names, refused []string, err error
 	return names, refused, nil
 }
 
-// parseLoopbackAddrs parses a LoopbackAddrsKey value: comma-separated IPv4
+// parseLocalAddrs parses a LocalAddrsKey value: comma-separated IPv4
 // addresses, each bare or with /32. Addresses that would shadow something
 // else (loopback, link-local, multicast, ...) and duplicates are errors.
-func parseLoopbackAddrs(s string) ([]netip.Addr, error) {
+func parseLocalAddrs(s string) ([]netip.Addr, error) {
 	if strings.TrimSpace(s) == "" {
 		return nil, nil
 	}
@@ -160,27 +160,27 @@ func parseLoopbackAddrs(s string) ([]netip.Addr, error) {
 	for _, f := range strings.Split(s, ",") {
 		f = strings.TrimSpace(f)
 		if f == "" {
-			return nil, fmt.Errorf("%s: empty entry in %q", LoopbackAddrsKey, s)
+			return nil, fmt.Errorf("%s: empty entry in %q", LocalAddrsKey, s)
 		}
 		a, err := netip.ParseAddr(f)
 		if err != nil {
 			p, perr := netip.ParsePrefix(f)
 			if perr != nil {
-				return nil, fmt.Errorf("%s: %q is not an IPv4 address or /32", LoopbackAddrsKey, f)
+				return nil, fmt.Errorf("%s: %q is not an IPv4 address or /32", LocalAddrsKey, f)
 			}
 			if p.Bits() != 32 || !p.Addr().Is4() {
-				return nil, fmt.Errorf("%s: %q: only IPv4 /32 addresses are allowed", LoopbackAddrsKey, f)
+				return nil, fmt.Errorf("%s: %q: only IPv4 /32 addresses are allowed", LocalAddrsKey, f)
 			}
 			a = p.Addr()
 		}
 		switch {
 		case !a.Is4():
-			return nil, fmt.Errorf("%s: %q: only IPv4 /32 addresses are allowed", LoopbackAddrsKey, f)
+			return nil, fmt.Errorf("%s: %q: only IPv4 /32 addresses are allowed", LocalAddrsKey, f)
 		case a.IsUnspecified(), a.IsLoopback(), a.IsLinkLocalUnicast(), a.IsMulticast(),
 			a == netip.AddrFrom4([4]byte{255, 255, 255, 255}), a.As4()[0] >= 240:
-			return nil, fmt.Errorf("%s: %q is not a usable unicast address", LoopbackAddrsKey, f)
+			return nil, fmt.Errorf("%s: %q is not a usable unicast address", LocalAddrsKey, f)
 		case seen[a]:
-			return nil, fmt.Errorf("%s: %s is listed twice", LoopbackAddrsKey, a)
+			return nil, fmt.Errorf("%s: %s is listed twice", LocalAddrsKey, a)
 		}
 		seen[a] = true
 		addrs = append(addrs, a)

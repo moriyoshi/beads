@@ -311,15 +311,15 @@ func applyUserDataEnv(cfg *Config, ud []byte) {
 	}
 }
 
-// configureLoopbackAddrs adds the addresses user-data lists in
-// LoopbackAddrsKey to lo0 as /32 aliases, so that the kernel accepts packets
+// configureLocalAddrs adds the addresses user-data lists in
+// LocalAddrsKey to lo0 as /32 aliases, so that the kernel accepts packets
 // a router sends to them, such as an AWS overlay IP routed to this
 // instance's interface. Replies leave from the alias; connections the program
 // opens still leave from the interface's own address, as the kernel picks the
 // source from the outgoing route. The result goes to the console, to
-// /var/run/appliance/loopback-addrs and to the program's environment.
-func configureLoopbackAddrs(cfg *Config) error {
-	addrs, err := parseLoopbackAddrs(cfg.loopbackAddrs)
+// /var/run/appliance/local-addrs and to the program's environment.
+func configureLocalAddrs(cfg *Config) error {
+	addrs, err := parseLocalAddrs(cfg.localAddrs)
 	if err != nil {
 		return fmt.Errorf("user-data: %w", err)
 	}
@@ -332,7 +332,7 @@ func configureLoopbackAddrs(cfg *Config) error {
 		for _, a := range addrs {
 			for _, h := range have {
 				if n, ok := h.(*net.IPNet); ok && n.IP.Equal(net.IP(a.AsSlice())) {
-					return fmt.Errorf("user-data: %s: %s is already assigned (%s)", LoopbackAddrsKey, a, n)
+					return fmt.Errorf("user-data: %s: %s is already assigned (%s)", LocalAddrsKey, a, n)
 				}
 			}
 		}
@@ -357,13 +357,13 @@ func configureLoopbackAddrs(cfg *Config) error {
 				logf("network: %s = %d", name, v)
 			}
 		}
-		cfg.addPlatformEnv(map[string]string{LoopbackAddrsKey: strings.Join(cidrs, ",")})
+		cfg.addPlatformEnv(map[string]string{LocalAddrsKey: strings.Join(cidrs, ",")})
 	}
 	var content strings.Builder
 	for _, c := range cidrs {
 		content.WriteString(c + "\n")
 	}
-	if err := os.WriteFile(metadataDir+"/loopback-addrs", []byte(content.String()), 0o644); err != nil {
+	if err := os.WriteFile(metadataDir+"/local-addrs", []byte(content.String()), 0o644); err != nil {
 		logf("network: %v", err)
 	}
 	return nil
@@ -836,7 +836,7 @@ func main() {
 	// After startLogging, so that a fatal error here is shipped too. A bad
 	// value stops the appliance rather than start the program without
 	// addresses it is meant to answer on.
-	if err := configureLoopbackAddrs(cfg); err != nil {
+	if err := configureLocalAddrs(cfg); err != nil {
 		fatal(err)
 	}
 	logf("ready")

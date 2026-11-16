@@ -11,11 +11,11 @@ _LOGS = [
 ]
 
 # What the program logs when user-data puts 192.168.255.1 on lo0
-# (APPLIANCE_LOOPBACK_ADDRS): it answers there, and its own connections still
+# (APPLIANCE_LOCAL_ADDRS): it answers there, and its own connections still
 # leave from the interface's address.
 _ALIAS_LOGS = [
     "hello: answered on 192.168.255.1:8080",
-    "hello: outbound source is not a loopback alias",
+    "hello: outbound source is not one of APPLIANCE_LOCAL_ADDRS",
 ]
 
 # Traces and metrics from the program's own OpenTelemetry SDK, which init
@@ -36,7 +36,7 @@ _SHUTDOWN = [
 # The example appliance: the CLOUD kernel plus //e2e/hello, trusting curl's
 # extract of Mozilla's CA store. Its boot and smoke tests launch it with
 # hello.env as user-data, which init turns into the program's environment:
-# the greeting comes from there, and so does a loopback alias.
+# the greeting comes from there, and so does an extra local address.
 netbsd_go_appliance(
     name = "hello_image",
     args = ["-listen=:8080"],
@@ -55,8 +55,8 @@ netbsd_go_appliance(
 
 # The same program for arm64 (QEMU virt here; AWS Graviton on EC2), also
 # exercising the hostmetrics receiver on NetBSD, and user-data in the JSON
-# form: an array of {"key", "value"} pairs, with the same loopback alias. (JSON has no comments, so
-# hello.json carries no license header.)
+# form: an array of {"key", "value"} pairs, with the same extra local
+# address. (JSON has no comments, so hello.json carries no license header.)
 netbsd_go_appliance(
     name = "hello_arm64_image",
     arch = "aarch64",

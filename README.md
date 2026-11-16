@@ -143,7 +143,7 @@ AWS_PROFILE=my-profile AWS_REGION=ap-northeast-1 \
 On boot, init reads SMBIOS to find out which platform it is on. On EC2 it also
 reads IMDSv2. It writes what it learns to `/var/run/appliance/`
 (`platform`, `instance-id`, `region`, `zone`, `local-ipv4`, `user-data`, and
-`loopback-addrs` and `timesync`, which report what init set up) and
+`local-addrs` and `timesync`, which report what init set up) and
 passes `APPLIANCE_PLATFORM`, `APPLIANCE_INSTANCE_ID` and `APPLIANCE_REGION` to
 the program. User-data written as `KEY=VALUE` lines also sets program
 environment variables; see [Environment from user-data](#environment-from-user-data).
@@ -194,7 +194,7 @@ aws ec2 run-instances --image-id ami-... --user-data file://env.json ...
 - **Precedence:** user-data overrides the image's `env`, which overrides
   what init discovers about the instance. User-data can't set `PATH`,
   `HOME`, `TMPDIR`, `APPLIANCE_*` or `OTEL_*`; init ignores those and logs
-  their names. The exception is `APPLIANCE_LOOPBACK_ADDRS`, which is a
+  their names. The exception is `APPLIANCE_LOCAL_ADDRS`, which is a
   setting for init; see [Extra local addresses](#extra-local-addresses-overlay-ips).
 - **Secrets:** the console log shows variable names, never values. Anyone
   who can read the instance's user-data (on EC2: `ec2:DescribeInstanceAttribute`,
@@ -217,11 +217,11 @@ aws ec2 run-instances --image-id ami-... --user-data file://env.json ...
 
 ## Extra local addresses (overlay IPs)
 
-`APPLIANCE_LOOPBACK_ADDRS` in user-data, in any of the forms above, lists
+`APPLIANCE_LOCAL_ADDRS` in user-data, in any of the forms above, lists
 extra IPv4 addresses for the instance to treat as its own:
 
 ```json
-{"APPLIANCE_LOOPBACK_ADDRS": "192.168.255.1/32", "LISTEN_ADDR": ":4750"}
+{"APPLIANCE_LOCAL_ADDRS": "192.168.255.1/32", "LISTEN_ADDR": ":4750"}
 ```
 
 This is for the AWS "overlay IP" pattern. The address lies outside the VPC
@@ -253,9 +253,9 @@ APIs and needs no IAM.
 - **What you can check:**
   - The console logs `network: lo0 aliases ...` along with the values of
     `checkinterface` and `forwarding`.
-  - `/var/run/appliance/loopback-addrs` lists the aliases, one CIDR per line
+  - `/var/run/appliance/local-addrs` lists the aliases, one CIDR per line
     (empty without any).
-  - The program gets `APPLIANCE_LOOPBACK_ADDRS` with the normalized list
+  - The program gets `APPLIANCE_LOCAL_ADDRS` with the normalized list
     (`192.168.255.1/32,...`).
 - **`user_data_env = False`** does not disable this setting; it only stops
   user-data from reaching the program's environment.
