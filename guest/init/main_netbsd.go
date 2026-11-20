@@ -21,10 +21,14 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	otellog "go.opentelemetry.io/otel/log"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
 	"golang.org/x/sys/unix"
 
 	"github.com/moriyoshi/beads/guest/internal/dhcp"
+	"github.com/moriyoshi/beads/guest/internal/health"
 	"github.com/moriyoshi/beads/guest/internal/logship"
 	"github.com/moriyoshi/beads/guest/internal/metadata"
 	"github.com/moriyoshi/beads/guest/internal/nbsys"
@@ -36,6 +40,14 @@ import (
 // shipper sends log records to the embedded collector; nil when log
 // shipping is off.
 var shipper *logship.Shipper
+
+// meters sends init's own metrics to the embedded collector; nil when
+// telemetry is off or init has none to send.
+var meters *sdkmetric.MeterProvider
+
+// telemetryResource describes the appliance in init's own telemetry; nil
+// when telemetry is off.
+var telemetryResource *resource.Resource
 
 func logf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
@@ -369,6 +381,63 @@ func configureLocalAddrs(cfg *Config) error {
 	return nil
 }
 
+// healthMon probes the program and reports to Cloud Map; nil when off.
+var healthMon *health.Monitor
+
+// startHealth starts health reporting if user-data asks for it (see
+// health.Keys). A bad setting is logged and leaves reporting off rather than
+// stop the program, which works without it.
+func startHealth(cfg *Config, info *metadata.Info) {
+	hc, err := health.ParseConfig(cfg.healthEnv, info.InstanceID)
+	switch {
+	case err != nil:
+		logf("health: %v; not reporting health", err)
+		return
+	case hc == nil:
+		if len(cfg.healthEnv) > 0 {
+			logf("health: %s is not set; not reporting health", health.ServiceIDKey)
+		}
+		return
+	case info.Platform != metadata.EC2 || info.Region == "":
+		logf("health: Cloud Map needs EC2 instance metadata (platform %s); not reporting health", info.Platform)
+		return
+	case !info.HasCredentials:
+		logf("health: warning: the instance has no instance profile; reports fail until it has one")
+	}
+	m, err := health.NewMonitor(hc, health.NewCloudMap(info.Region, hc.ServiceID, hc.InstanceID, "", nil))
+	if err != nil {
+		logf("health: %v; not reporting health", err)
+		return
+	}
+	m.Logf = logf
+	if telemetryResource != nil {
+		exp, err := otlpmetrichttp.New(context.Background(), otlpmetrichttp.WithEndpointURL("http://"+otelconfig.HTTPListen+"/v1/metrics"))
+		if err != nil {
+			logf("health: metrics: %v; not sending them", err)
+		} else {
+			meters = sdkmetric.NewMeterProvider(
+				sdkmetric.WithResource(telemetryResource),
+				sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exp, sdkmetric.WithInterval(60*time.Second))),
+			)
+			m.Meter = meters.Meter("nbinit")
+		}
+	}
+	logf("health: %s", hc)
+	m.Start()
+	healthMon = m
+}
+
+// stopHealth reports UNHEALTHY before the program stops, so that Cloud Map
+// stops handing out this instance.
+func stopHealth() {
+	if healthMon == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	healthMon.Stop(ctx)
+	cancel()
+}
+
 // startTimesync sets the clock from the configured or platform time servers
 // before the program starts, then keeps it in step in the background.
 // Progress goes to the console and to /var/run/appliance/timesync.
@@ -425,6 +494,7 @@ func halt(how string) {
 	case "halt":
 		howto = nbsys.RBHalt
 	}
+	stopHealth()
 	logf("%s", how)
 	flushLogs()
 	// Let the console finish printing everything init wrote before the
@@ -617,7 +687,8 @@ func startLogging(cfg *Config, info *metadata.Info, lease *dhcp.Lease) {
 		return
 	}
 	logf("started the OpenTelemetry collector (pid %d)", collectorPid())
-	s, err := logship.New(context.Background(), "http://"+otelconfig.HTTPListen, logship.Resource(oc.ServiceName, in))
+	telemetryResource = logship.Resource(oc.ServiceName, in)
+	s, err := logship.New(context.Background(), "http://"+otelconfig.HTTPListen, telemetryResource)
 	if err != nil {
 		logf("logs: %v; not shipping", err)
 		return
@@ -631,6 +702,14 @@ func startLogging(cfg *Config, info *metadata.Info, lease *dhcp.Lease) {
 // flushLogs ships what the program last wrote, then stops the collector so
 // that it exports everything it holds.
 func flushLogs() {
+	if meters != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := meters.Shutdown(ctx); err != nil {
+			fmt.Fprintf(os.Stderr, "nbinit: metrics: flushing: %v\n", err)
+		}
+		cancel()
+		meters = nil
+	}
 	if shipper == nil {
 		return
 	}
@@ -773,12 +852,14 @@ func supervise(cfg *Config, power <-chan string) {
 			how := map[os.Signal]string{unix.SIGTERM: "poweroff", unix.SIGINT: "reboot", unix.SIGUSR1: "halt"}[sig]
 			logf("received %v; stopping", sig)
 			restart.Stop()
+			stopHealth()
 			stop(proc, exits, cfg.stopTimeout())
 			halt(how)
 
 		case how := <-power:
 			logf("stopping for %s", how)
 			restart.Stop()
+			stopHealth()
 			stop(proc, exits, cfg.stopTimeout())
 			halt(how)
 		}
@@ -839,6 +920,7 @@ func main() {
 	if err := configureLocalAddrs(cfg); err != nil {
 		fatal(err)
 	}
+	startHealth(cfg, info)
 	logf("ready")
 	supervise(cfg, power)
 }

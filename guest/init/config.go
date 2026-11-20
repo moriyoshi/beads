@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/moriyoshi/beads/guest/internal/health"
 	"github.com/moriyoshi/beads/guest/internal/metadata"
 	"github.com/moriyoshi/beads/guest/internal/otelconfig"
 )
@@ -67,6 +68,8 @@ type Config struct {
 	userEnv map[string]string
 	// localAddrs is user-data's LocalAddrsKey, unparsed.
 	localAddrs string
+	// healthEnv holds user-data's health.Keys.
+	healthEnv map[string]string
 }
 
 // LocalAddrsKey names the user-data variable that lists extra local
@@ -131,6 +134,13 @@ func (c *Config) setUserEnv(userData []byte) (names, refused []string, err error
 	}
 	c.localAddrs = env[LocalAddrsKey]
 	delete(env, LocalAddrsKey)
+	c.healthEnv = map[string]string{}
+	for _, k := range health.Keys {
+		if v, ok := env[k]; ok {
+			c.healthEnv[k] = v
+			delete(env, k)
+		}
+	}
 	if !c.useUserDataEnv() {
 		return nil, nil, nil
 	}
